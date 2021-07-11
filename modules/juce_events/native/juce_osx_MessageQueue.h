@@ -33,7 +33,7 @@ public:
        #if JUCE_IOS
         runLoop = CFRunLoopGetCurrent();
        #else
-        runLoop = CFRunLoopGetMain();
+        runLoop = CFRunLoopGetCurrent();
        #endif
 
         CFRunLoopSourceContext sourceContext;

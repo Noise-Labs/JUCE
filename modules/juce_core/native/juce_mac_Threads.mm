@@ -39,7 +39,7 @@ JUCE_API bool JUCE_CALLTYPE Process::isForegroundProcess()
        return true;
 
    #if JUCE_MAC
-    return [NSApp isActive];
+    return true;
    #else
     return isIOSAppActive;
    #endif
