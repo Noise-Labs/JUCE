@@ -703,12 +703,7 @@ public:
     void setParameter (int32 index, float value)
     {
         if (auto* param = juceParameters.getParamForIndex (index))
-        {
-            param->setValue (value);
-
-            inParameterChangedCallback = true;
-            param->sendValueChangedMessageToListeners (value);
-        }
+            setValueAndNotifyIfChanged (*param, value);
     }
 
     static void setParameterCB (Vst2::AEffect* vstInterface, int32 index, float value)
@@ -1433,6 +1428,15 @@ private:
     static void checkWhetherMessageThreadIsCorrect() {}
    #endif
 
+    void setValueAndNotifyIfChanged (AudioProcessorParameter& param, float newValue)
+    {
+        if (param.getValue() == newValue)
+            return;
+
+        inParameterChangedCallback = true;
+        param.setValueNotifyingHost (newValue);
+    }
+
     //==============================================================================
     template <typename FloatType>
     void deleteTempChannels (VstTempBuffers<FloatType>& tmpBuffers)
@@ -1716,12 +1720,7 @@ private:
         {
             if (! LegacyAudioParameter::isLegacy (param))
             {
-                auto value = param->getValueForText (String::fromUTF8 ((char*) args.ptr));
-                param->setValue (value);
-
-                inParameterChangedCallback = true;
-                param->sendValueChangedMessageToListeners (value);
-
+                setValueAndNotifyIfChanged (*param, param->getValueForText (String::fromUTF8 ((char*) args.ptr)));
                 return 1;
             }
         }
@@ -1997,8 +1996,6 @@ private:
        #if ! JUCE_MAC
         if (editorComp != nullptr)
             editorComp->setContentScaleFactor (scale);
-
-        lastScaleFactorReceived = scale;
        #else
         ignoreUnused (scale);
        #endif
@@ -2072,10 +2069,6 @@ private:
     Vst2::ERect editorRect;
     MidiBuffer midiEvents;
     VSTMidiEventList outgoingEvents;
-
-   #if ! JUCE_MAC
-    float lastScaleFactorReceived = 1.0f;
-   #endif
 
     LegacyAudioParametersWrapper juceParameters;
 

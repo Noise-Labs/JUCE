@@ -70,12 +70,14 @@ public:
 
         [view setPostsFrameChangedNotifications: YES];
 
-       #if defined (MAC_OS_X_VERSION_10_8) && (MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_8) \
-        && USE_COREGRAPHICS_RENDERING && JUCE_COREGRAPHICS_DRAW_ASYNC
+       #if USE_COREGRAPHICS_RENDERING && JUCE_COREGRAPHICS_DRAW_ASYNC
         if (! getComponentAsyncLayerBackedViewDisabled (component))
         {
-            [view setWantsLayer: YES];
-            [[view layer] setDrawsAsynchronously: YES];
+            if (@available (macOS 10.8, *))
+            {
+                [view setWantsLayer: YES];
+                [[view layer] setDrawsAsynchronously: YES];
+            }
         }
        #endif
 
@@ -96,14 +98,8 @@ public:
                                                            defer: YES];
             setOwner (window, this);
 
-          #if JUCE_OBJC_HAS_AVAILABLE_FEATURE || (defined (MAC_OS_X_VERSION_10_10) && MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_10)
-           #if JUCE_OBJC_HAS_AVAILABLE_FEATURE
             if (@available (macOS 10.10, *))
-           #endif
-            {
-                [window setAccessibilityElement: component.getAccessibilityHandler() != nullptr];
-            }
-          #endif
+                [window setAccessibilityElement: YES];
 
             [window orderOut: nil];
             [window setDelegate: (id<NSWindowDelegate>) window];
@@ -113,9 +109,8 @@ public:
             if (! [window isOpaque])
                 [window setBackgroundColor: [NSColor clearColor]];
 
-           #if defined (MAC_OS_X_VERSION_10_9) && (MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_9)
-            [view setAppearance: [NSAppearance appearanceNamed: NSAppearanceNameAqua]];
-           #endif
+           if (@available (macOS 10.9, *))
+                [view setAppearance: [NSAppearance appearanceNamed: NSAppearanceNameAqua]];
 
             [window setHasShadow: ((windowStyleFlags & windowHasDropShadow) != 0)];
 
@@ -136,11 +131,10 @@ public:
             if ((windowStyleFlags & (windowHasMaximiseButton | windowHasTitleBar)) == (windowHasMaximiseButton | windowHasTitleBar))
                 [window setCollectionBehavior: NSWindowCollectionBehaviorFullScreenPrimary];
 
-            if ([window respondsToSelector: @selector (setRestorable:)])
-                [window setRestorable: NO];
+            [window setRestorable: NO];
 
-           #if defined (MAC_OS_X_VERSION_10_13) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_13)
-            if ([window respondsToSelector: @selector (setTabbingMode:)])
+           #if defined (MAC_OS_X_VERSION_10_12) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_12)
+            if (@available (macOS 10.12, *))
                 [window setTabbingMode: NSWindowTabbingModeDisallowed];
            #endif
 
@@ -858,12 +852,15 @@ public:
         if (r.size.width < 1.0f || r.size.height < 1.0f)
             return;
 
-        auto cg = (CGContextRef) [[NSGraphicsContext currentContext]
-       #if (defined (MAC_OS_X_VERSION_10_10) && MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_10)
-                                  CGContext];
-       #else
-                                  graphicsPort];
-       #endif
+        auto cg = []
+        {
+            if (@available (macOS 10.10, *))
+                return (CGContextRef) [[NSGraphicsContext currentContext] CGContext];
+
+            JUCE_BEGIN_IGNORE_WARNINGS_GCC_LIKE ("-Wdeprecated-declarations")
+            return (CGContextRef) [[NSGraphicsContext currentContext] graphicsPort];
+            JUCE_END_IGNORE_WARNINGS_GCC_LIKE
+        }();
 
         if (! component.isOpaque())
             CGContextClearRect (cg, CGContextGetClipBoundingBox (cg));
@@ -1049,12 +1046,14 @@ public:
     {
         if (isBlockedByModalComponent())
             if (auto* modal = Component::getCurrentlyModalComponent())
-                modal->inputAttemptWhenModal();
+                if (auto* otherPeer = modal->getPeer())
+                    if ((otherPeer->getStyleFlags() & ComponentPeer::windowIsTemporary) != 0)
+                        modal->inputAttemptWhenModal();
     }
 
     bool canBecomeKeyWindow()
     {
-        return component.isVisible() && (getStyleFlags() & juce::ComponentPeer::windowIgnoresKeyPresses) == 0;
+        return component.isVisible() && (getStyleFlags() & ComponentPeer::windowIgnoresKeyPresses) == 0;
     }
 
     bool canBecomeMainWindow()
@@ -1703,7 +1702,7 @@ struct NSViewComponentPeerWrapper  : public Base
 
     static NSViewComponentPeer* getOwner (id self)
     {
-        return Base::template getIvar<NSViewComponentPeer*> (self, "owner");
+        return getIvar<NSViewComponentPeer*> (self, "owner");
     }
 
     static id getAccessibleChild (id self)
@@ -1795,6 +1794,8 @@ struct JuceNSViewClass   : public NSViewComponentPeerWrapper<ObjCClass<NSView>>
         addMethod (NSViewComponentPeer::frameChangedSelector,   frameChanged,             "v@:@");
         addMethod (NSViewComponentPeer::becomeKeySelector,      becomeKey,                "v@:@");
 
+        addMethod (@selector (performKeyEquivalent:),           performKeyEquivalent,     "c@:@");
+
         addProtocol (@protocol (NSTextInput));
 
         registerClass();
@@ -1866,7 +1867,7 @@ private:
         // Without setting contentsFormat macOS Big Sur will always set the invalid area
         // to be the entire frame.
        #if defined (MAC_OS_X_VERSION_10_12) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_12
-        if (NSFoundationVersionNumber > (double) NSFoundationVersionNumber10_11_Max)
+        if (@available (macOS 10.12, *))
         {
             CALayer* layer = ((NSView*) self).layer;
             layer.contentsFormat = kCAContentsFormatRGBA8Uint;
@@ -2144,9 +2145,9 @@ private:
         return [getAccessibleChild (self) accessibilityFocusedUIElement];
     }
 
-    static BOOL getAccessibilityIsIgnored (id self, SEL)
+    static BOOL getAccessibilityIsIgnored (id, SEL)
     {
-        return ! [self isAccessibilityElement];
+        return YES;
     }
 
     static id getAccessibilityAttributeValue (id self, SEL, NSString* attribute)
@@ -2155,6 +2156,34 @@ private:
             return getAccessibilityChildren (self, {});
 
         return sendSuperclassMessage<id> (self, @selector (accessibilityAttributeValue:), attribute);
+    }
+
+    static bool tryPassingKeyEventToPeer (NSEvent* e)
+    {
+        if ([e type] != NSEventTypeKeyDown && [e type] != NSEventTypeKeyUp)
+            return false;
+
+        if (auto* focused = Component::getCurrentlyFocusedComponent())
+        {
+            if (auto* peer = dynamic_cast<NSViewComponentPeer*> (focused->getPeer()))
+            {
+                return [e type] == NSEventTypeKeyDown ? peer->redirectKeyDown (e)
+                                                      : peer->redirectKeyUp (e);
+            }
+        }
+
+        return false;
+    }
+
+    static BOOL performKeyEquivalent (id self, SEL s, NSEvent* event)
+    {
+        // We try passing shortcut keys to the currently focused component first.
+        // If the component doesn't want the event, we'll fall back to the superclass
+        // implementation, which will pass the event to the main menu.
+        if (tryPassingKeyEventToPeer (event))
+            return YES;
+
+        return sendSuperclassMessage<BOOL> (self, s, event);
     }
 };
 
@@ -2175,7 +2204,7 @@ struct JuceNSWindowClass   : public NSViewComponentPeerWrapper<ObjCClass<NSWindo
         addMethod (@selector (zoom:),                               zoom,                      "v@:@");
         addMethod (@selector (windowWillStartLiveResize:),          windowWillStartLiveResize, "v@:@");
         addMethod (@selector (windowDidEndLiveResize:),             windowDidEndLiveResize,    "v@:@");
-        addMethod (@selector (window:shouldPopUpDocumentPathMenu:), shouldPopUpPathMenu, "B@:@", @encode (NSMenu*));
+        addMethod (@selector (window:shouldPopUpDocumentPathMenu:), shouldPopUpPathMenu, "c@:@", @encode (NSMenu*));
         addMethod (@selector (isFlipped),                           isFlipped,                 "c@:");
 
         addMethod (@selector (accessibilityTitle),                  getAccessibilityTitle,     "@@:");
@@ -2186,7 +2215,7 @@ struct JuceNSWindowClass   : public NSViewComponentPeerWrapper<ObjCClass<NSWindo
         addMethod (@selector (accessibilitySubrole),                getAccessibilitySubrole,   "@@:");
 
         addMethod (@selector (window:shouldDragDocumentWithEvent:from:withPasteboard:),
-                   shouldAllowIconDrag, "B@:@", @encode (NSEvent*), @encode (NSPoint), @encode (NSPasteboard*));
+                   shouldAllowIconDrag, "c@:@", @encode (NSEvent*), @encode (NSPoint), @encode (NSPasteboard*));
 
         addProtocol (@protocol (NSWindowDelegate));
 
@@ -2356,7 +2385,10 @@ private:
 
     static NSAccessibilityRole getAccessibilitySubrole (id self, SEL)
     {
-        return [getAccessibleChild (self) accessibilitySubrole];
+        if (@available (macOS 10.10, *))
+            return [getAccessibleChild (self) accessibilitySubrole];
+
+        return nil;
     }
 };
 

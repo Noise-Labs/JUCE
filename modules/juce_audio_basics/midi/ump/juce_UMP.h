@@ -20,34 +20,24 @@
   ==============================================================================
 */
 
+#include "../juce_MidiDataConcatenator.h"
+
+#include "juce_UMPProtocols.h"
+#include "juce_UMPUtils.h"
+#include "juce_UMPacket.h"
+#include "juce_UMPSysEx7.h"
+#include "juce_UMPView.h"
+#include "juce_UMPIterator.h"
+#include "juce_UMPackets.h"
+#include "juce_UMPFactory.h"
+#include "juce_UMPConversion.h"
+#include "juce_UMPMidi1ToBytestreamTranslator.h"
+#include "juce_UMPMidi1ToMidi2DefaultTranslator.h"
+#include "juce_UMPConverters.h"
+#include "juce_UMPDispatcher.h"
+#include "juce_UMPReceiver.h"
+
 namespace juce
 {
-namespace universal_midi_packets
-{
-
-uint32_t SysEx7::getNumPacketsRequiredForDataSize (uint32_t size)
-{
-    constexpr auto denom = 6;
-    return (size / denom) + ((size % denom) != 0);
-}
-
-SysEx7::PacketBytes SysEx7::getDataBytes (const PacketX2& packet)
-{
-    const auto numBytes = Utils::getChannel (packet[0]);
-    constexpr uint8_t maxBytes = 6;
-    jassert (numBytes <= maxBytes);
-
-    return
-    {
-        { packet.getU8<2>(),
-          packet.getU8<3>(),
-          packet.getU8<4>(),
-          packet.getU8<5>(),
-          packet.getU8<6>(),
-          packet.getU8<7>() },
-        jmin (numBytes, maxBytes)
-    };
-}
-
-}
+namespace ump = universal_midi_packets;
 }

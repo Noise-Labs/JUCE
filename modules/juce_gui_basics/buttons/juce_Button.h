@@ -394,8 +394,11 @@ public:
                                          bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) = 0;
     };
 
-    // This method's parameters have changed - see the new version.
-    JUCE_DEPRECATED (void setToggleState (bool, bool));
+    //==============================================================================
+   #ifndef DOXYGEN
+    [[deprecated ("This method's parameters have changed.")]]
+    void setToggleState (bool, bool);
+   #endif
 
 protected:
     //==============================================================================
@@ -470,8 +473,6 @@ protected:
     void focusLost (FocusChangeType) override;
     /** @internal */
     void enablementChanged() override;
-    /** @internal */
-    std::unique_ptr<AccessibilityHandler> createAccessibilityHandler() override;
 
 private:
     //==============================================================================
@@ -497,6 +498,8 @@ private:
     bool isKeyDown = false;
     bool triggerOnMouseDown = false;
     bool generateTooltip = false;
+
+    std::unique_ptr<AccessibilityHandler> createAccessibilityHandler() override;
 
     void repeatTimerCallback();
     bool keyStateChangedCallback();
